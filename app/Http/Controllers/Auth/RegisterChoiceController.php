@@ -8,6 +8,6 @@ class RegisterChoiceController extends Controller
 {
     public function create()
     {
-        return view('auth.register-choice');
+        return view('auth.register-choice', ['selectedProfile' => 'eleve']);
     }
 }

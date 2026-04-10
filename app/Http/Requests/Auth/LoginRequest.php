@@ -6,6 +6,7 @@ use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -31,6 +32,7 @@ class LoginRequest extends FormRequest
         return [
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            'profile' => ['nullable', 'in:eleve,enseignant'],
         ];
     }
 
@@ -50,6 +52,33 @@ class LoginRequest extends FormRequest
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
+            ]);
+        }
+
+        $user = $this->user();
+        $selectedProfile = $this->input('profile');
+
+        if ($user && Schema::hasColumn('users', 'is_active') && ! (bool) $user->is_active) {
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'email' => 'Ce compte est desactive par l administration.',
+            ]);
+        }
+
+        if ($user && $user->role === 'superadmin') {
+            RateLimiter::clear($this->throttleKey());
+
+            return;
+        }
+
+        if ($user && $selectedProfile && $user->role !== $selectedProfile) {
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'profile' => $selectedProfile === 'enseignant'
+                    ? 'Ce compte ne correspond pas au profil Formateur.'
+                    : 'Ce compte ne correspond pas au profil Apprenant.',
             ]);
         }
 

@@ -57,12 +57,13 @@ class DemoUsersSeeder extends Seeder
             ]
         );
 
-        User::firstOrCreate(
-            ['email' => 'superadmin@example.test'],
+        User::updateOrCreate(
+            ['email' => 'superadmin@laravelcourse.test'],
             [
-                'name' => 'Superadmin Demo',
-                'password' => $password,
+                'name' => 'Super Admin',
+                'password' => Hash::make('SuperAdmin123!'),
                 'role' => User::ROLE_SUPERADMIN,
+                'email_verified_at' => now(),
             ]
         );
     }

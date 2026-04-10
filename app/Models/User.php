@@ -6,9 +6,13 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Permission;
 use App\Models\Role;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
@@ -26,9 +30,39 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'matricule',
+        'whatsapp_phone',
         'password',
         'role',
+        'is_active',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (User $user): void {
+            if (! Schema::hasColumn('users', 'matricule')) {
+                return;
+            }
+
+            if (empty($user->matricule)) {
+                $user->matricule = self::generateUniqueMatricule();
+            }
+        });
+    }
+
+    public static function generateUniqueMatricule(): string
+    {
+        $prefix = 'LC'.now()->format('ymd');
+
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $candidate = $prefix.str_pad((string) random_int(0, 99999), 5, '0', STR_PAD_LEFT);
+            if (! self::query()->where('matricule', $candidate)->exists()) {
+                return $candidate;
+            }
+        }
+
+        return $prefix.strtoupper(Str::random(6));
+    }
 // Vérifier si l'utilisateur est un élève
     public function isEleve()
     {
@@ -107,6 +141,74 @@ class User extends Authenticatable
     {
         return $this->hasOne(Enseignant::class);
     }
+
+    public function coursesAsFormateur()
+    {
+        return $this->hasMany(Course::class, 'formateur_user_id');
+    }
+
+    public function evaluationsAsFormateur()
+    {
+        return $this->hasMany(Evaluation::class, 'formateur_user_id');
+    }
+
+    public function evaluationAttempts()
+    {
+        return $this->hasMany(EvaluationAttempt::class, 'eleve_user_id');
+    }
+
+    public function enrollments()
+    {
+        return $this->hasMany(CourseEnrollment::class, 'eleve_user_id');
+    }
+
+    public function enrolledCourses()
+    {
+        return $this->belongsToMany(Course::class, 'course_enrollments', 'eleve_user_id', 'course_id')
+            ->withTimestamps();
+    }
+
+    public function coFormateurCourses()
+    {
+        return $this->belongsToMany(Course::class, 'course_co_formateurs', 'formateur_user_id', 'course_id')
+            ->withTimestamps();
+    }
+
+    public function inAppNotifications()
+    {
+        return $this->hasMany(InAppNotification::class);
+    }
+
+    public function courseComments()
+    {
+        return $this->hasMany(CourseComment::class, 'eleve_user_id');
+    }
+
+    public function conversations(): BelongsToMany
+    {
+        return $this->belongsToMany(Conversation::class, 'conversation_participants')
+            ->withTimestamps();
+    }
+
+    public function sentConversationMessages(): HasMany
+    {
+        return $this->hasMany(ConversationMessage::class, 'sender_id');
+    }
+
+    public function unreadConversationMessagesCount(): int
+    {
+        if (! Schema::hasTable('conversation_messages') || ! Schema::hasTable('conversation_participants')) {
+            return 0;
+        }
+
+        return ConversationMessage::query()
+            ->whereHas('conversation.participants', function ($query) {
+                $query->whereKey($this->id);
+            })
+            ->where('sender_id', '!=', $this->id)
+            ->whereNull('read_at')
+            ->count();
+    }
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -124,5 +226,6 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'is_active' => 'boolean',
     ];
 }

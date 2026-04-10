@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="UTF-8">
     <title>Inscription Élève | LEEDCOURSE</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ asset('css/platform-pro.css') }}">
 
     <style>
         body {
@@ -119,6 +120,7 @@
 </head>
 <body>
 
+
 <div class="container">
     <div class="image-side">
         <h1>
@@ -127,22 +129,36 @@
     </div>
 
     <div class="form-side">
-        <div class="register-box">
-            <img src="{{ asset('images/logo.png') }}" alt="LEEDCOURSE">
+        <div class="register-box pro-form-card fade-in" style="padding: 1.3rem; border-radius: 1rem;">
+            <a href="{{ url('/') }}" class="brand-lockup" style="justify-content:center; width:100%; margin-bottom: 0.9rem;">
+                <span class="brand-logo-badge">
+                    <img class="brand-logo-img" src="{{ asset('images/logo.jpeg') }}" alt="LEEDCOURSE">
+                </span>
+                <span class="brand-name" style="color:#0f172a;">LEEDCOURSE</span>
+            </a>
             <h2>Inscription Élève</h2>
+
+            @if ($errors->any())
+                <div style="margin-bottom:12px;border:1px solid #fecaca;background:#fef2f2;color:#b91c1c;padding:10px;border-radius:8px;font-size:13px;">
+                    @foreach ($errors->all() as $error)
+                        <div>{{ $error }}</div>
+                    @endforeach
+                </div>
+            @endif
 
             <form method="POST" action="{{ route('register.eleve.store') }}">
                 @csrf
 
-                <input type="text" name="name" placeholder="Nom complet" required>
-                <input type="email" name="email" placeholder="Adresse email" required>
+                <input type="text" name="name" value="{{ old('name') }}" placeholder="Nom complet" required>
+                <input type="email" name="email" value="{{ old('email') }}" placeholder="Adresse email" required>
+                <input type="text" name="whatsapp_phone" value="{{ old('whatsapp_phone') }}" placeholder="Numero WhatsApp (ex: 2376XXXXXXXX)" required>
                 <input type="password" name="password" placeholder="Mot de passe" required>
                 <input type="password" name="password_confirmation" placeholder="Confirmer le mot de passe" required>
 
-                <input type="text" name="classe" placeholder="Classe (ex: Terminale S)" required>
-                <input type="date" name="date_naissance" placeholder="Date de naissance" required>
+                <input type="text" name="classe" value="{{ old('classe') }}" placeholder="Classe (ex: Terminale S)" required>
+                <input type="date" name="date_naissance" value="{{ old('date_naissance') }}" placeholder="Date de naissance" required>
 
-                <button type="submit">Créer mon compte</button>
+                <button type="submit" class="pro-submit">Créer mon compte</button>
             </form>
 
             <div class="links">
@@ -159,5 +175,9 @@
     </div>
 </div>
 
+@include('partials.password-toggle')
+
+    <script src="{{ asset('js/button-sounds.js') }}" defer></script>
+    @include('partials.language-switcher')
 </body>
 </html>

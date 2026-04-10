@@ -14,6 +14,7 @@ class Enseignant extends Model
         'prenom',
         'email',
         'specialite',
+        'diplome',
         'annees_experience',
     ];
 

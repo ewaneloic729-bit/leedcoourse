@@ -104,3 +104,31 @@ td { padding: 1rem 1.5rem; border-bottom: 1px solid var(--slate-200); }
 .stat-value { font-size: 1.875rem; font-weight: bold; margin: 0.5rem 0 0 0; }
 .text-green { color: #16a34a; }
 .text-blue { color: #2563eb; }
+
+@media (max-width: 768px) {
+    body {
+        padding: 1rem;
+    }
+
+    .header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .btn-add {
+        width: 100%;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+        min-width: 720px;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}

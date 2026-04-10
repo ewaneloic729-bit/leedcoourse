@@ -2,10 +2,11 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\PasswordResetOtp;
 use App\Models\User;
-use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
@@ -19,53 +20,114 @@ class PasswordResetTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_reset_password_link_can_be_requested()
+    public function test_reset_password_code_can_be_requested_by_email()
     {
-        Notification::fake();
-
         $user = User::factory()->create();
+        Mail::fake();
 
-        $this->post('/forgot-password', ['email' => $user->email]);
+        $response = $this->post('/forgot-password', [
+            'channel' => 'email',
+            'email' => $user->email,
+        ]);
 
-        Notification::assertSentTo($user, ResetPassword::class);
+        $response->assertRedirect('/reset-code');
+        $this->assertDatabaseHas('password_reset_otps', [
+            'user_id' => $user->id,
+            'channel' => 'email',
+            'consumed_at' => null,
+        ]);
+        Mail::assertSent(\App\Mail\PasswordResetMail::class);
     }
 
-    public function test_reset_password_screen_can_be_rendered()
+    public function test_reset_password_code_can_be_requested_by_whatsapp()
     {
-        Notification::fake();
+        $user = User::factory()->create([
+            'whatsapp_phone' => '237612345678',
+        ]);
 
-        $user = User::factory()->create();
+        $response = $this->post('/forgot-password', [
+            'channel' => 'whatsapp',
+            'whatsapp_phone' => '237612345678',
+        ]);
 
-        $this->post('/forgot-password', ['email' => $user->email]);
-
-        Notification::assertSentTo($user, ResetPassword::class, function ($notification) {
-            $response = $this->get('/reset-password/'.$notification->token);
-
-            $response->assertStatus(200);
-
-            return true;
+        $response->assertRedirect('/reset-code');
+        $response->assertSessionHas('password_reset_whatsapp_url', function ($value) {
+            return str_starts_with((string) $value, 'https://wa.me/237612345678?text=');
         });
+        $this->assertDatabaseHas('password_reset_otps', [
+            'user_id' => $user->id,
+            'channel' => 'whatsapp',
+            'consumed_at' => null,
+        ]);
     }
 
-    public function test_password_can_be_reset_with_valid_token()
+    public function test_reset_code_screen_can_be_rendered_with_session_context()
     {
-        Notification::fake();
+        $response = $this->withSession([
+            'password_reset_channel' => 'whatsapp',
+            'password_reset_sent_to' => '******5678',
+            'password_reset_requested_at' => now()->timestamp,
+            'password_reset_fake' => true,
+            'password_reset_whatsapp_url' => 'https://wa.me/237612345678?text=code',
+        ])->get('/reset-code');
 
+        $response->assertStatus(200);
+        $response->assertSee('Ouvrir WhatsApp');
+    }
+
+    public function test_password_can_be_reset_with_valid_otp_code()
+    {
         $user = User::factory()->create();
 
-        $this->post('/forgot-password', ['email' => $user->email]);
+        PasswordResetOtp::create([
+            'user_id' => $user->id,
+            'channel' => 'email',
+            'code_hash' => Hash::make('123456'),
+            'expires_at' => now()->addMinutes(15),
+            'attempts' => 0,
+        ]);
 
-        Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
-            $response = $this->post('/reset-password', [
-                'token' => $notification->token,
-                'email' => $user->email,
-                'password' => 'password',
-                'password_confirmation' => 'password',
-            ]);
+        $response = $this->withSession([
+            'password_reset_user_id' => $user->id,
+            'password_reset_channel' => 'email',
+            'password_reset_requested_at' => now()->timestamp,
+            'password_reset_fake' => false,
+            'password_reset_sent_to' => 'te***@example.test',
+        ])->post('/reset-code', [
+            'code' => '123456',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ]);
 
-            $response->assertSessionHasNoErrors();
+        $response->assertRedirect('/login');
+        $this->assertTrue(Hash::check('Password123!', $user->fresh()->password));
+    }
 
-            return true;
-        });
+    public function test_invalid_otp_increments_attempt_counter()
+    {
+        $user = User::factory()->create();
+
+        $otp = PasswordResetOtp::create([
+            'user_id' => $user->id,
+            'channel' => 'email',
+            'code_hash' => Hash::make('123456'),
+            'expires_at' => now()->addMinutes(15),
+            'attempts' => 0,
+        ]);
+
+        $response = $this->withSession([
+            'password_reset_user_id' => $user->id,
+            'password_reset_channel' => 'email',
+            'password_reset_requested_at' => now()->timestamp,
+            'password_reset_fake' => false,
+            'password_reset_sent_to' => 'te***@example.test',
+        ])->post('/reset-code', [
+            'code' => '654321',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ]);
+
+        $response->assertSessionHasErrors('code');
+        $this->assertSame(1, $otp->fresh()->attempts);
     }
 }
